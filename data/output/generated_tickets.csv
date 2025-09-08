@@ -1,0 +1,75 @@
+id,title,description,category,priority,assigned_team,source_feedback_ids,metadata,created_at,updated_at,status,source_id,source,technical_details,agent_confidence,tags,estimated_effort
+MISC-20250907-1,Great app! Love the new features,Great app! Love the new features,other,medium,General,[],{},2025-09-07T19:16:47.010275,2025-09-08T00:46:47.010284,Open,1,app_store,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['app-store', 'other', 'sentiment-neutral']",
+MISC-20250907-2,App crashes when I try to save my work,App crashes when I try to save my work,other,medium,General,[],{},2025-09-07T19:16:47.011515,2025-09-08T00:46:47.011523,Open,2,app_store,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['app-store', 'other', 'sentiment-neutral']",
+MISC-20250907-3,Good app but could use dark mode,Good app but could use dark mode,other,medium,General,[],{},2025-09-07T19:16:47.012845,2025-09-08T00:46:47.012852,Open,3,app_store,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['app-store', 'other', 'sentiment-neutral']",
+MISC-20250907-4,"Terrible update, nothing works anymore","Terrible update, nothing works anymore",other,medium,General,[],{},2025-09-07T19:16:47.014268,2025-09-08T00:46:47.014277,Open,4,app_store,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['app-store', 'other', 'sentiment-neutral']",
+MISC-20250907-5,Perfect! Exactly what I needed,Perfect! Exactly what I needed,other,medium,General,[],{},2025-09-07T19:16:47.015543,2025-09-08T00:46:47.015549,Open,5,app_store,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['app-store', 'other', 'sentiment-neutral']",
+MISC-20250907-1,"App Crash Issue
+
+The app keeps crashing when I try...","App Crash Issue
+
+The app keeps crashing when I try to export data. This is very frustrating.",other,medium,General,[],{},2025-09-07T19:16:47.056097,2025-09-08T00:46:47.056108,Open,1,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2,"Feature Request
+
+Please add the ability to sync wi...","Feature Request
+
+Please add the ability to sync with Google Drive. This would be very helpful.",other,medium,General,[],{},2025-09-07T19:16:47.057773,2025-09-08T00:46:47.057783,Open,2,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-3,"Login Problems
+
+I can't login to my account","Login Problems
+
+I can't login to my account. The password reset doesn't work.",other,medium,General,[],{},2025-09-07T19:16:47.059253,2025-09-08T00:46:47.059262,Open,3,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-4,"Thank you
+
+Just wanted to say thank you for the gr...","Thank you
+
+Just wanted to say thank you for the great customer service!",other,medium,General,[],{},2025-09-07T19:16:47.060629,2025-09-08T00:46:47.060638,Open,4,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-5,"Performance Issue
+
+The app is very slow when loadi...","Performance Issue
+
+The app is very slow when loading large files. Can this be improved?",other,medium,General,[],{},2025-09-07T19:16:47.062130,2025-09-08T00:46:47.062138,Open,5,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2001,"john.doe@email.com
+
+Data Export Feature Request","john.doe@email.com
+
+Data Export Feature Request",other,medium,General,[],{},2025-09-07T19:16:47.097576,2025-09-08T00:46:47.097587,Open,2001,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2002,"jane.smith@corp.com
+
+URGENT: App Won't Start","jane.smith@corp.com
+
+URGENT: App Won't Start",other,medium,General,[],{},2025-09-07T19:16:47.099767,2025-09-08T00:46:47.099776,Open,2002,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2003,"mike.wilson@startup.io
+
+Fantastic Support Experien...","mike.wilson@startup.io
+
+Fantastic Support Experience",other,medium,General,[],{},2025-09-07T19:16:47.101715,2025-09-08T00:46:47.101725,Open,2003,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2004,"lisa.brown@agency.co
+
+Performance Issues on Mobile","lisa.brown@agency.co
+
+Performance Issues on Mobile",other,medium,General,[],{},2025-09-07T19:16:47.103649,2025-09-08T00:46:47.103658,Open,2004,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2005,admin@securetech,"admin@securetech.net
+
+Security Audit Findings",other,medium,General,[],{},2025-09-07T19:16:47.105855,2025-09-08T00:46:47.105864,Open,2005,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2006,"design.team@creative.agency
+
+UI Feedback and Sugge...","design.team@creative.agency
+
+UI Feedback and Suggestions",other,medium,General,[],{},2025-09-07T19:16:47.149260,2025-09-08T00:46:47.149270,Open,2006,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2007,developer@techcorp,"developer@techcorp.com
+
+API Integration Documentation",other,medium,General,[],{},2025-09-07T19:16:47.150820,2025-09-08T00:46:47.150826,Open,2007,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2008,manager@logistics,"manager@logistics.biz
+
+Billing Error - Duplicate Charges",other,medium,General,[],{},2025-09-07T19:16:47.152334,2025-09-08T00:46:47.152342,Open,2008,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2009,"test.user@qa.company
+
+Feature Works Perfectly","test.user@qa.company
+
+Feature Works Perfectly",other,medium,General,[],{},2025-09-07T19:16:47.154630,2025-09-08T00:46:47.154638,Open,2009,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",
+MISC-20250907-2010,"support.needed@help.me
+
+Lost All My Data","support.needed@help.me
+
+Lost All My Data",other,medium,General,[],{},2025-09-07T19:16:47.156738,2025-09-08T00:46:47.156747,Open,2010,support_email,"{'classification_confidence': 0.0, 'category': 'other', 'sentiment': 'neutral', 'keywords': []}",0.0,"['other', 'support-email', 'sentiment-neutral']",

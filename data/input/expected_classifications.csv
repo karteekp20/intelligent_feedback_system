@@ -1,0 +1,81 @@
+source_id,source_type,category,priority,technical_details,suggested_title
+review_0001,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0002,app_store_review,Bug,Critical,Severity: High - Error encountered,Login functionality not working
+review_0003,app_store_review,Complaint,Low,,User complaint requires attention
+review_0004,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0005,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0006,app_store_review,Bug,Critical,Device: iPhone 14; Version: v2.1.3; Severity: Critical - App crashes,App crash issue needs investigation
+review_0007,app_store_review,Feature Request,Medium,Requested feature: dark mode,Feature request: Add dark mode
+review_0008,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0009,app_store_review,Praise,Low,,Positive user feedback
+review_0010,app_store_review,Bug,Critical,Version: v2.0.5,Data synchronization problem
+review_0011,app_store_review,Complaint,Low,,User complaint requires attention
+review_0012,app_store_review,Complaint,Low,,User complaint requires attention
+review_0013,app_store_review,Bug,Critical,Version: v2.5.2; Severity: Critical - App crashes,App crash issue needs investigation
+review_0014,app_store_review,Bug,Critical,Technical issue reported,Data synchronization problem
+review_0015,app_store_review,Feature Request,Medium,Requested feature: widget support,Feature request: Add widget support
+review_0016,app_store_review,Complaint,Low,,User complaint requires attention
+review_0017,app_store_review,Praise,Low,,Positive user feedback
+review_0018,app_store_review,Bug,Critical,Severity: High - Error encountered,Login functionality not working
+review_0019,app_store_review,Praise,Low,,Positive user feedback
+review_0020,app_store_review,Complaint,Low,,User complaint requires attention
+review_0021,app_store_review,Praise,Low,,Positive user feedback
+review_0022,app_store_review,Praise,Low,,Positive user feedback
+review_0023,app_store_review,Complaint,Low,,User complaint requires attention
+review_0024,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0025,app_store_review,Complaint,Low,,User complaint requires attention
+review_0026,app_store_review,Feature Request,Medium,Requested feature: widget support,Feature request: Add widget support
+review_0027,app_store_review,Bug,Critical,Severity: Critical - App crashes,App crash issue needs investigation
+review_0028,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0029,app_store_review,Feature Request,Medium,Requested feature: offline sync,Feature request: Add offline sync
+review_0030,app_store_review,Complaint,Low,,User complaint requires attention
+review_0031,app_store_review,Complaint,Low,,User complaint requires attention
+review_0032,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0033,app_store_review,Spam,Low,,User feedback for review
+review_0034,app_store_review,Bug,Critical,Severity: Critical - App crashes,App crash issue needs investigation
+review_0035,app_store_review,Bug,Critical,Device: iPhone 14; Severity: Critical - App crashes,App crash issue needs investigation
+review_0036,app_store_review,Bug,High,Version: version 3.0,Technical issue reported by user
+review_0037,app_store_review,Complaint,Low,,User complaint requires attention
+review_0038,app_store_review,Bug,Critical,Severity: High - Error encountered,Technical issue reported by user
+review_0039,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0040,app_store_review,Spam,Low,,User feedback for review
+review_0041,app_store_review,Complaint,Low,,User complaint requires attention
+review_0042,app_store_review,Bug,Critical,Severity: Critical - App crashes,App crash issue needs investigation
+review_0043,app_store_review,Spam,Low,,User feedback for review
+review_0044,app_store_review,Bug,Critical,Severity: High - Error encountered,Login functionality not working
+review_0045,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0046,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0047,app_store_review,Praise,Low,,Positive user feedback
+review_0048,app_store_review,Complaint,Low,,User complaint requires attention
+review_0049,app_store_review,Complaint,Medium,,User complaint requires attention
+review_0050,app_store_review,Complaint,Medium,,User complaint requires attention
+email_0001,support_email,Bug,Critical,Device: iPhone SE; Version: recent update; Severity: Critical - App crashes,Technical issue reported by user
+email_0002,support_email,Feature Request,Medium,Requested feature: custom themes,Feature request: Add new feature
+email_0003,support_email,Bug,High,Technical issue reported,Technical issue reported by user
+email_0004,support_email,Complaint,Medium,,User complaint requires attention
+email_0005,support_email,Bug,Critical,Device: iPhone SE; Version: latest update; Severity: Critical - App crashes,Technical issue reported by user
+email_0006,support_email,Bug,Critical,Device: iPhone 14; Version: latest update; Severity: Critical - App crashes,Technical issue reported by user
+email_0007,support_email,Feature Request,Medium,Requested feature: custom themes,Feature request: Add new feature
+email_0008,support_email,Feature Request,Medium,Requested feature: collaboration tools,Feature request: Add voice notes
+email_0009,support_email,Bug,Critical,Device: iPhone 13; Version: v1.9.8; Severity: Critical - App crashes,Technical issue reported by user
+email_0010,support_email,Feature Request,Medium,Requested feature: cloud backup,Feature request: Add new feature
+email_0011,support_email,Bug,Critical,Device: iPhone 13; Version: v2.1.3; Severity: Critical - App crashes,Technical issue reported by user
+email_0012,support_email,Bug,Critical,Device: iPhone 14; Version: v3.0.1; Severity: Critical - App crashes,App crash issue needs investigation
+email_0013,support_email,Bug,Critical,Device: iPhone 12; Version: version 2.1; Severity: Critical - App crashes,Technical issue reported by user
+email_0014,support_email,Bug,Critical,Device: Samsung Galaxy S23; Version: v3.0.1; Severity: Critical - App crashes,Technical issue reported by user
+email_0015,support_email,Feature Request,Medium,Requested feature: cloud backup,Feature request: Add offline sync
+email_0016,support_email,Bug,Critical,Device: iPhone 14; Version: v2.1.3; Severity: Critical - App crashes,Technical issue reported by user
+email_0017,support_email,Bug,Critical,Version: v2.1.3; Severity: Critical - App crashes,Technical issue reported by user
+email_0018,support_email,Bug,Critical,Device: iPhone 13; Version: v3.0.1; Severity: Critical - App crashes,Technical issue reported by user
+email_0019,support_email,Bug,Critical,Device: Samsung Galaxy S22; Version: v1.9.8; Severity: Critical - App crashes,Technical issue reported by user
+email_0020,support_email,Feature Request,Medium,Requested feature: bulk operations,Feature request: Add collaboration tools
+email_0021,support_email,Bug,Critical,Device: iPhone 14; Version: v3.0.1; Severity: Critical - App crashes,Technical issue reported by user
+email_0022,support_email,Bug,High,Technical issue reported,Technical issue reported by user
+email_0023,support_email,Feature Request,Medium,Requested feature: dark mode,Feature request: Add keyboard shortcuts
+email_0024,support_email,Bug,Critical,Version: recent update; Severity: Critical - App crashes,Technical issue reported by user
+email_0025,support_email,Bug,Critical,Device: iPhone SE; Version: v3.0.1; Severity: Critical - App crashes,Login functionality not working
+email_0026,support_email,Feature Request,Medium,Requested feature: offline sync,Feature request: Add new feature
+email_0027,support_email,Bug,Critical,Device: iPhone 12; Version: v2.0.5; Severity: Critical - App crashes,Data synchronization problem
+email_0028,support_email,Bug,Critical,Device: iPhone SE; Version: v2.1.3; Severity: Critical - App crashes,Data synchronization problem
+email_0029,support_email,Bug,Critical,Version: v2.0.5; Severity: Critical - App crashes,Technical issue reported by user
+email_0030,support_email,Bug,Critical,Device: iPhone 14; Version: version 3.0; Severity: Critical - App crashes,Technical issue reported by user

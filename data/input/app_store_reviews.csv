@@ -1,0 +1,16 @@
+review_id,user_id,rating,review_text,date,app_version,device_type,country
+1,user123,5,"Great app! Love the new features",2024-01-15,2.1.0,iPhone,US
+2,user456,2,"App crashes when I try to save my work",2024-01-16,2.1.0,Android,UK
+3,user789,4,"Good app but could use dark mode",2024-01-17,2.1.0,iPad,CA
+4,user101,1,"Terrible update, nothing works anymore",2024-01-18,2.1.0,iPhone,AU
+5,user202,5,"Perfect! Exactly what I needed",2024-01-19,2.1.0,Android,US
+1001,user_123,"App crashes every time I try to save my work. Very frustrating! Lost hours of progress.",1,2025-09-07,3.2.1,iPhone 14,US
+1002,user_456,"Love the new dark mode feature! Makes it so much easier to use at night. Great update!",5,2025-09-06,3.2.1,Samsung Galaxy,CA
+1003,user_789,"The app is really slow on my old phone. Takes forever to load. Can you optimize for older devices?",2,2025-09-05,3.2.1,iPhone 11,UK
+1004,user_321,"Need better integration with Google Drive. Currently can't sync my files properly.",3,2025-09-04,3.2.0,Pixel 7,AU
+1005,user_654,"Security vulnerability found - app stores passwords in plain text! Please fix ASAP!",1,2025-09-03,3.1.9,OnePlus 9,DE
+1006,user_987,"The UI is confusing. Can't find the export button anywhere. Poor design choices.",2,2025-09-02,3.2.1,iPad Pro,FR
+1007,user_147,"Excellent app! Does exactly what I need. Would recommend to anyone.",5,2025-09-01,3.2.1,iPhone 15,US
+1008,user_258,"App keeps freezing when I upload large files. Memory leak issue?",2,2025-08-31,3.2.0,Galaxy Tab,JP
+1009,user_369,"Please add a tutorial or help section. New users are completely lost.",3,2025-08-30,3.2.1,iPhone 13,CA
+1010,user_741,"Battery drain is terrible since the last update. Phone dies in 2 hours!",1,2025-08-29,3.2.1,Pixel 6,US

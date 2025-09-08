@@ -1,0 +1,1358 @@
+#!/usr/bin/env python3
+"""
+Production Deployment and Monitoring System
+Intelligent User Feedback Analysis and Action System
+"""
+
+import asyncio
+import json
+import time
+import smtplib
+import subprocess
+import psutil
+import schedule
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Callable
+from dataclasses import dataclass, asdict
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import logging
+import sys
+import os
+import docker
+import yaml
+
+project_root = Path(__file__).parent.parent
+sys.path.append(str(project_root))
+
+from src.core.pipeline import FeedbackProcessingPipeline
+from src.core.data_models import SystemStats, PipelineResult
+from src.utils.logger import get_logger
+from config.settings import OUTPUT_DIR, INPUT_DIR, PROCESSING_SETTINGS
+
+logger = get_logger(__name__)
+
+@dataclass
+class HealthCheck:
+    """System health check result."""
+    timestamp: str
+    service_name: str
+    status: str  # "healthy", "warning", "critical"
+    response_time_ms: float
+    details: Dict[str, Any]
+    error_message: Optional[str] = None
+
+@dataclass
+class Alert:
+    """System alert data structure."""
+    timestamp: str
+    severity: str  # "info", "warning", "error", "critical"
+    service: str
+    message: str
+    details: Dict[str, Any]
+    resolved: bool = False
+    resolution_time: Optional[str] = None
+
+@dataclass
+class DeploymentConfig:
+    """Deployment configuration."""
+    environment: str  # "development", "staging", "production"
+    docker_image: str
+    replicas: int
+    resource_limits: Dict[str, str]
+    environment_variables: Dict[str, str]
+    health_check_interval: int
+    backup_retention_days: int
+
+class ProductionMonitor:
+    """Comprehensive production monitoring system."""
+    
+    def __init__(self, config_file: Optional[Path] = None):
+        self.config_file = config_file or project_root / "deployment" / "monitor_config.yaml"
+        self.config = self._load_config()
+        
+        # Initialize monitoring components
+        self.health_checks: List[HealthCheck] = []
+        self.alerts: List[Alert] = []
+        self.metrics_history: List[Dict[str, Any]] = []
+        
+        # Monitoring state
+        self.is_monitoring = False
+        self.last_backup_time = None
+        self.system_start_time = datetime.now()
+        
+        # Setup directories
+        self.monitor_dir = OUTPUT_DIR / "monitoring"
+        self.monitor_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Setup logging
+        self._setup_monitoring_logging()
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """Load monitoring configuration."""
+        default_config = {
+            'monitoring': {
+                'health_check_interval': 60,  # seconds
+                'metrics_retention_days': 30,
+                'alert_thresholds': {
+                    'cpu_usage': 80,
+                    'memory_usage': 85,
+                    'disk_usage': 90,
+                    'response_time_ms': 5000,
+                    'error_rate': 5.0
+                }
+            },
+            'alerting': {
+                'email': {
+                    'enabled': False,
+                    'smtp_server': 'localhost',
+                    'smtp_port': 587,
+                    'username': '',
+                    'password': '',
+                    'from_email': 'monitor@feedbacksystem.com',
+                    'to_emails': []
+                },
+                'slack': {
+                    'enabled': False,
+                    'webhook_url': ''
+                }
+            },
+            'backup': {
+                'enabled': True,
+                'interval_hours': 24,
+                'retention_days': 7,
+                'compress': True
+            },
+            'deployment': {
+                'auto_deploy': False,
+                'rollback_on_failure': True,
+                'health_check_timeout': 300
+            }
+        }
+        
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r') as f:
+                    user_config = yaml.safe_load(f)
+                default_config.update(user_config)
+            except Exception as e:
+                logger.warning(f"Failed to load config from {self.config_file}: {e}")
+        
+        return default_config
+    
+    def _setup_monitoring_logging(self):
+        """Setup dedicated monitoring logging."""
+        monitor_log_file = self.monitor_dir / "monitor.log"
+        
+        monitor_handler = logging.FileHandler(monitor_log_file)
+        monitor_handler.setLevel(logging.INFO)
+        
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        monitor_handler.setFormatter(formatter)
+        
+        monitor_logger = logging.getLogger('production_monitor')
+        monitor_logger.addHandler(monitor_handler)
+        monitor_logger.setLevel(logging.INFO)
+        
+        self.monitor_logger = monitor_logger
+    
+    async def start_monitoring(self):
+        """Start comprehensive production monitoring."""
+        logger.info("🔍 Starting production monitoring system...")
+        self.is_monitoring = True
+        
+        # Schedule monitoring tasks
+        schedule.every(self.config['monitoring']['health_check_interval']).seconds.do(
+            self._run_health_checks_sync
+        )
+        
+        schedule.every(5).minutes.do(self._collect_metrics_sync)
+        schedule.every(1).hours.do(self._cleanup_old_data_sync)
+        
+        if self.config['backup']['enabled']:
+            schedule.every(self.config['backup']['interval_hours']).hours.do(
+                self._run_backup_sync
+            )
+        
+        # Start monitoring loop
+        try:
+            while self.is_monitoring:
+                schedule.run_pending()
+                await asyncio.sleep(10)  # Check every 10 seconds
+                
+        except KeyboardInterrupt:
+            logger.info("🛑 Monitoring stopped by user")
+        except Exception as e:
+            logger.error(f"❌ Monitoring error: {e}")
+            await self._send_alert("critical", "monitoring", f"Monitoring system failed: {e}")
+        
+        finally:
+            await self.stop_monitoring()
+    
+    async def stop_monitoring(self):
+        """Stop monitoring system gracefully."""
+        logger.info("🔄 Stopping monitoring system...")
+        self.is_monitoring = False
+        
+        # Save final state
+        await self._save_monitoring_state()
+        logger.info("✅ Monitoring system stopped")
+    
+    def _run_health_checks_sync(self):
+        """Synchronous wrapper for health checks."""
+        asyncio.create_task(self._run_health_checks())
+    
+    def _collect_metrics_sync(self):
+        """Synchronous wrapper for metrics collection."""
+        asyncio.create_task(self._collect_system_metrics())
+    
+    def _cleanup_old_data_sync(self):
+        """Synchronous wrapper for data cleanup."""
+        asyncio.create_task(self._cleanup_old_data())
+    
+    def _run_backup_sync(self):
+        """Synchronous wrapper for backup."""
+        asyncio.create_task(self._run_backup())
+    
+    async def _run_health_checks(self):
+        """Run comprehensive health checks."""
+        self.monitor_logger.info("Running health checks...")
+        
+        # System health checks
+        await self._check_system_resources()
+        await self._check_application_health()
+        await self._check_data_pipeline()
+        await self._check_external_dependencies()
+        
+        # Analyze health check results
+        await self._analyze_health_trends()
+    
+    async def _check_system_resources(self):
+        """Check system resource usage."""
+        try:
+            # CPU usage
+            cpu_percent = psutil.cpu_percent(interval=1)
+            
+            # Memory usage
+            memory = psutil.virtual_memory()
+            memory_percent = memory.percent
+            
+            # Disk usage
+            disk = psutil.disk_usage('/')
+            disk_percent = (disk.used / disk.total) * 100
+            
+            # Network stats
+            network = psutil.net_io_counters()
+            
+            health_details = {
+                'cpu_percent': cpu_percent,
+                'memory_percent': memory_percent,
+                'disk_percent': disk_percent,
+                'memory_available_gb': memory.available / (1024**3),
+                'disk_free_gb': disk.free / (1024**3),
+                'network_bytes_sent': network.bytes_sent,
+                'network_bytes_recv': network.bytes_recv
+            }
+            
+            # Determine health status
+            status = "healthy"
+            thresholds = self.config['monitoring']['alert_thresholds']
+            
+            if (cpu_percent > thresholds['cpu_usage'] or 
+                memory_percent > thresholds['memory_usage'] or 
+                disk_percent > thresholds['disk_usage']):
+                status = "warning"
+                
+                if (cpu_percent > 95 or memory_percent > 95 or disk_percent > 95):
+                    status = "critical"
+            
+            health_check = HealthCheck(
+                timestamp=datetime.now().isoformat(),
+                service_name="system_resources",
+                status=status,
+                response_time_ms=0,
+                details=health_details
+            )
+            
+            self.health_checks.append(health_check)
+            
+            # Send alerts if necessary
+            if status in ["warning", "critical"]:
+                await self._send_alert(
+                    status,
+                    "system_resources",
+                    f"High resource usage detected: CPU {cpu_percent:.1f}%, "
+                    f"Memory {memory_percent:.1f}%, Disk {disk_percent:.1f}%",
+                    health_details
+                )
+            
+        except Exception as e:
+            await self._record_health_check_error("system_resources", str(e))
+    
+    async def _check_application_health(self):
+        """Check application-specific health."""
+        try:
+            start_time = time.time()
+            
+            # Test pipeline initialization
+            pipeline = FeedbackProcessingPipeline(PROCESSING_SETTINGS)
+            await pipeline.initialize()
+            
+            # Test basic functionality
+            test_result = await self._run_basic_functionality_test(pipeline)
+            
+            response_time = (time.time() - start_time) * 1000
+            
+            await pipeline.cleanup()
+            
+            # Determine status
+            status = "healthy"
+            if response_time > self.config['monitoring']['alert_thresholds']['response_time_ms']:
+                status = "warning"
+            
+            if not test_result['success']:
+                status = "critical"
+            
+            health_check = HealthCheck(
+                timestamp=datetime.now().isoformat(),
+                service_name="application",
+                status=status,
+                response_time_ms=response_time,
+                details=test_result
+            )
+            
+            self.health_checks.append(health_check)
+            
+            if status != "healthy":
+                await self._send_alert(
+                    status,
+                    "application",
+                    f"Application health check failed: {test_result.get('error', 'Unknown error')}",
+                    test_result
+                )
+            
+        except Exception as e:
+            await self._record_health_check_error("application", str(e))
+    
+    async def _run_basic_functionality_test(self, pipeline: FeedbackProcessingPipeline) -> Dict[str, Any]:
+        """Run basic functionality test."""
+        try:
+            # Create minimal test data
+            test_data = [
+                {
+                    'id': 'health_check_001',
+                    'content': 'Test feedback for health check',
+                    'source': 'health_check',
+                    'timestamp': datetime.now().isoformat()
+                }
+            ]
+            
+            # Test CSV reading
+            test_file = self.monitor_dir / "health_check_test.csv"
+            import csv
+            with open(test_file, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=test_data[0].keys())
+                writer.writeheader()
+                writer.writerows(test_data)
+            
+            # Process test file
+            result = await pipeline.process_file(test_file)
+            
+            # Cleanup
+            if test_file.exists():
+                test_file.unlink()
+            
+            return {
+                'success': result.success,
+                'items_processed': len(result.processed_items),
+                'tickets_generated': len(result.generated_tickets),
+                'agents_working': len(result.agent_results),
+                'error': None
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'items_processed': 0,
+                'tickets_generated': 0,
+                'agents_working': 0,
+                'error': str(e)
+            }
+    
+    async def _check_data_pipeline(self):
+        """Check data pipeline health."""
+        try:
+            # Check input directory
+            input_files = list(INPUT_DIR.glob("*.csv"))
+            
+            # Check output directory
+            output_files = list(OUTPUT_DIR.glob("*.csv"))
+            
+            # Check recent processing logs
+            log_files = list((OUTPUT_DIR / "logs").glob("*.log")) if (OUTPUT_DIR / "logs").exists() else []
+            
+            # Check database connections (if applicable)
+            db_status = await self._check_database_connections()
+            
+            details = {
+                'input_files_count': len(input_files),
+                'output_files_count': len(output_files),
+                'log_files_count': len(log_files),
+                'database_status': db_status,
+                'last_processing_time': self._get_last_processing_time()
+            }
+            
+            # Determine status
+            status = "healthy"
+            
+            # Check if processing has stalled
+            last_processing = details.get('last_processing_time')
+            if last_processing:
+                time_since_last = datetime.now() - datetime.fromisoformat(last_processing)
+                if time_since_last > timedelta(hours=6):  # No processing in 6 hours
+                    status = "warning"
+            
+            health_check = HealthCheck(
+                timestamp=datetime.now().isoformat(),
+                service_name="data_pipeline",
+                status=status,
+                response_time_ms=0,
+                details=details
+            )
+            
+            self.health_checks.append(health_check)
+            
+        except Exception as e:
+            await self._record_health_check_error("data_pipeline", str(e))
+    
+    async def _check_external_dependencies(self):
+        """Check external dependencies health."""
+        try:
+            dependencies_status = {}
+            
+            # Check OpenAI API (if configured)
+            openai_status = await self._check_openai_api()
+            dependencies_status['openai'] = openai_status
+            
+            # Check email service (if configured)
+            if self.config['alerting']['email']['enabled']:
+                email_status = await self._check_email_service()
+                dependencies_status['email'] = email_status
+            
+            # Check other external services
+            external_status = await self._check_other_external_services()
+            dependencies_status.update(external_status)
+            
+            # Determine overall status
+            status = "healthy"
+            failed_services = [k for k, v in dependencies_status.items() if not v.get('available', True)]
+            
+            if failed_services:
+                status = "warning" if len(failed_services) < len(dependencies_status) / 2 else "critical"
+            
+            health_check = HealthCheck(
+                timestamp=datetime.now().isoformat(),
+                service_name="external_dependencies",
+                status=status,
+                response_time_ms=0,
+                details=dependencies_status
+            )
+            
+            self.health_checks.append(health_check)
+            
+            if failed_services:
+                await self._send_alert(
+                    status,
+                    "external_dependencies",
+                    f"External services unavailable: {', '.join(failed_services)}",
+                    dependencies_status
+                )
+            
+        except Exception as e:
+            await self._record_health_check_error("external_dependencies", str(e))
+    
+    async def _check_openai_api(self) -> Dict[str, Any]:
+        """Check OpenAI API availability."""
+        try:
+            # Simple API test (if API key is available)
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                return {'available': False, 'error': 'No API key configured'}
+            
+            # Test with minimal request
+            import openai
+            openai.api_key = api_key
+            
+            start_time = time.time()
+            response = await openai.ChatCompletion.acreate(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": "test"}],
+                max_tokens=1
+            )
+            response_time = (time.time() - start_time) * 1000
+            
+            return {
+                'available': True,
+                'response_time_ms': response_time,
+                'model': 'gpt-3.5-turbo'
+            }
+            
+        except Exception as e:
+            return {'available': False, 'error': str(e)}
+    
+    async def _check_email_service(self) -> Dict[str, Any]:
+        """Check email service availability."""
+        try:
+            email_config = self.config['alerting']['email']
+            
+            with smtplib.SMTP(email_config['smtp_server'], email_config['smtp_port']) as server:
+                if email_config.get('username') and email_config.get('password'):
+                    server.starttls()
+                    server.login(email_config['username'], email_config['password'])
+            
+            return {'available': True, 'server': email_config['smtp_server']}
+            
+        except Exception as e:
+            return {'available': False, 'error': str(e)}
+    
+    async def _check_other_external_services(self) -> Dict[str, Dict[str, Any]]:
+        """Check other external services."""
+        services = {}
+        
+        # Check Slack webhook (if configured)
+        if self.config['alerting']['slack']['enabled']:
+            webhook_url = self.config['alerting']['slack']['webhook_url']
+            if webhook_url:
+                try:
+                    import aiohttp
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(webhook_url, json={'text': 'Health check'}) as response:
+                            services['slack'] = {
+                                'available': response.status == 200,
+                                'status_code': response.status
+                            }
+                except Exception as e:
+                    services['slack'] = {'available': False, 'error': str(e)}
+        
+        return services
+    
+    async def _check_database_connections(self) -> Dict[str, Any]:
+        """Check database connections (placeholder for future implementation)."""
+        # This would check actual database connections if the system used one
+        return {'status': 'not_applicable', 'message': 'No database configured'}
+    
+    def _get_last_processing_time(self) -> Optional[str]:
+        """Get timestamp of last processing activity."""
+        try:
+            processing_log = OUTPUT_DIR / "processing_log.csv"
+            if processing_log.exists():
+                import pandas as pd
+                df = pd.read_csv(processing_log)
+                if not df.empty and 'timestamp' in df.columns:
+                    return df['timestamp'].iloc[-1]
+        except Exception:
+            pass
+        return None
+    
+    async def _record_health_check_error(self, service_name: str, error_message: str):
+        """Record a health check error."""
+        health_check = HealthCheck(
+            timestamp=datetime.now().isoformat(),
+            service_name=service_name,
+            status="critical",
+            response_time_ms=0,
+            details={},
+            error_message=error_message
+        )
+        
+        self.health_checks.append(health_check)
+        
+        await self._send_alert(
+            "critical",
+            service_name,
+            f"Health check failed: {error_message}",
+            {'error': error_message}
+        )
+    
+    async def _collect_system_metrics(self):
+        """Collect detailed system metrics."""
+        try:
+            metrics = {
+                'timestamp': datetime.now().isoformat(),
+                'system': {
+                    'cpu_percent': psutil.cpu_percent(interval=1),
+                    'memory': dict(psutil.virtual_memory()._asdict()),
+                    'disk': dict(psutil.disk_usage('/')._asdict()),
+                    'network': dict(psutil.net_io_counters()._asdict()),
+                    'processes': len(psutil.pids())
+                },
+                'application': {
+                    'uptime_seconds': (datetime.now() - self.system_start_time).total_seconds(),
+                    'health_checks_run': len(self.health_checks),
+                    'alerts_generated': len(self.alerts),
+                    'files_in_input': len(list(INPUT_DIR.glob("*.csv"))),
+                    'files_in_output': len(list(OUTPUT_DIR.glob("*.csv")))
+                }
+            }
+            
+            self.metrics_history.append(metrics)
+            
+            # Keep only recent metrics
+            retention_days = self.config['monitoring']['metrics_retention_days']
+            cutoff_time = datetime.now() - timedelta(days=retention_days)
+            
+            self.metrics_history = [
+                m for m in self.metrics_history 
+                if datetime.fromisoformat(m['timestamp']) > cutoff_time
+            ]
+            
+            # Save metrics to file
+            await self._save_metrics()
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to collect metrics: {e}")
+    
+    async def _analyze_health_trends(self):
+        """Analyze health check trends and patterns."""
+        if len(self.health_checks) < 10:  # Need minimum data
+            return
+        
+        # Get recent health checks (last hour)
+        recent_time = datetime.now() - timedelta(hours=1)
+        recent_checks = [
+            hc for hc in self.health_checks 
+            if datetime.fromisoformat(hc.timestamp) > recent_time
+        ]
+        
+        if not recent_checks:
+            return
+        
+        # Analyze patterns by service
+        services = {}
+        for check in recent_checks:
+            if check.service_name not in services:
+                services[check.service_name] = []
+            services[check.service_name].append(check)
+        
+        # Look for degrading services
+        for service_name, checks in services.items():
+            if len(checks) >= 3:
+                statuses = [check.status for check in checks[-3:]]
+                
+                # Check for degradation pattern
+                if statuses == ["healthy", "warning", "critical"]:
+                    await self._send_alert(
+                        "warning",
+                        "trend_analysis",
+                        f"Service {service_name} showing degradation pattern",
+                        {'recent_statuses': statuses}
+                    )
+    
+    async def _send_alert(self, severity: str, service: str, message: str, details: Optional[Dict] = None):
+        """Send alert through configured channels."""
+        alert = Alert(
+            timestamp=datetime.now().isoformat(),
+            severity=severity,
+            service=service,
+            message=message,
+            details=details or {}
+        )
+        
+        self.alerts.append(alert)
+        self.monitor_logger.warning(f"ALERT [{severity.upper()}] {service}: {message}")
+        
+        # Send email alert
+        if self.config['alerting']['email']['enabled']:
+            await self._send_email_alert(alert)
+        
+        # Send Slack alert
+        if self.config['alerting']['slack']['enabled']:
+            await self._send_slack_alert(alert)
+        
+        # Save alert to file
+        await self._save_alerts()
+    
+    async def _send_email_alert(self, alert: Alert):
+        """Send email alert."""
+        try:
+            email_config = self.config['alerting']['email']
+            
+            msg = MIMEMultipart()
+            msg['From'] = email_config['from_email']
+            msg['To'] = ', '.join(email_config['to_emails'])
+            msg['Subject'] = f"[{alert.severity.upper()}] Feedback System Alert: {alert.service}"
+            
+            body = f"""
+            Alert Details:
+            
+            Timestamp: {alert.timestamp}
+            Severity: {alert.severity}
+            Service: {alert.service}
+            Message: {alert.message}
+            
+            Additional Details:
+            {json.dumps(alert.details, indent=2)}
+            
+            System: Intelligent Feedback Analysis System
+            """
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            with smtplib.SMTP(email_config['smtp_server'], email_config['smtp_port']) as server:
+                if email_config.get('username') and email_config.get('password'):
+                    server.starttls()
+                    server.login(email_config['username'], email_config['password'])
+                
+                server.send_message(msg)
+            
+            logger.info(f"📧 Email alert sent for {alert.service}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to send email alert: {e}")
+    
+    async def _send_slack_alert(self, alert: Alert):
+        """Send Slack alert."""
+        try:
+            webhook_url = self.config['alerting']['slack']['webhook_url']
+            
+            # Color based on severity
+            color_map = {
+                'info': 'good',
+                'warning': 'warning',
+                'error': 'danger',
+                'critical': 'danger'
+            }
+            
+            payload = {
+                'attachments': [{
+                    'color': color_map.get(alert.severity, 'warning'),
+                    'title': f"Feedback System Alert: {alert.service}",
+                    'text': alert.message,
+                    'fields': [
+                        {'title': 'Severity', 'value': alert.severity.upper(), 'short': True},
+                        {'title': 'Timestamp', 'value': alert.timestamp, 'short': True},
+                        {'title': 'Service', 'value': alert.service, 'short': True}
+                    ],
+                    'footer': 'Intelligent Feedback Analysis System'
+                }]
+            }
+            
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(webhook_url, json=payload) as response:
+                    if response.status == 200:
+                        logger.info(f"💬 Slack alert sent for {alert.service}")
+                    else:
+                        logger.error(f"❌ Slack alert failed: {response.status}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to send Slack alert: {e}")
+    
+    async def _run_backup(self):
+        """Run system backup."""
+        if not self.config['backup']['enabled']:
+            return
+        
+        try:
+            logger.info("💾 Starting system backup...")
+            
+            backup_dir = OUTPUT_DIR / "backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_name = f"feedback_system_backup_{timestamp}"
+            
+            # Create backup archive
+            if self.config['backup']['compress']:
+                backup_file = backup_dir / f"{backup_name}.tar.gz"
+                await self._create_compressed_backup(backup_file)
+            else:
+                backup_folder = backup_dir / backup_name
+                await self._create_folder_backup(backup_folder)
+            
+            # Cleanup old backups
+            await self._cleanup_old_backups(backup_dir)
+            
+            self.last_backup_time = datetime.now()
+            logger.info(f"✅ Backup completed: {backup_name}")
+            
+        except Exception as e:
+            logger.error(f"❌ Backup failed: {e}")
+            await self._send_alert("error", "backup", f"Backup failed: {e}")
+    
+    async def _create_compressed_backup(self, backup_file: Path):
+        """Create compressed backup archive."""
+        import tarfile
+        
+        with tarfile.open(backup_file, 'w:gz') as tar:
+            # Backup output directory
+            tar.add(OUTPUT_DIR, arcname='output')
+            
+            # Backup configuration
+            config_dir = project_root / "config"
+            if config_dir.exists():
+                tar.add(config_dir, arcname='config')
+            
+            # Backup logs
+            logs_dir = project_root / "logs"
+            if logs_dir.exists():
+                tar.add(logs_dir, arcname='logs')
+    
+    async def _create_folder_backup(self, backup_folder: Path):
+        """Create folder-based backup."""
+        import shutil
+        
+        backup_folder.mkdir(parents=True, exist_ok=True)
+        
+        # Copy output directory
+        if OUTPUT_DIR.exists():
+            shutil.copytree(OUTPUT_DIR, backup_folder / "output", dirs_exist_ok=True)
+        
+        # Copy configuration
+        config_dir = project_root / "config"
+        if config_dir.exists():
+            shutil.copytree(config_dir, backup_folder / "config", dirs_exist_ok=True)
+        
+        # Copy logs
+        logs_dir = project_root / "logs"
+        if logs_dir.exists():
+            shutil.copytree(logs_dir, backup_folder / "logs", dirs_exist_ok=True)
+    
+    async def _cleanup_old_backups(self, backup_dir: Path):
+        """Clean up old backup files."""
+        retention_days = self.config['backup']['retention_days']
+        cutoff_time = datetime.now() - timedelta(days=retention_days)
+        
+        for backup_file in backup_dir.iterdir():
+            if backup_file.stat().st_mtime < cutoff_time.timestamp():
+                try:
+                    if backup_file.is_file():
+                        backup_file.unlink()
+                    elif backup_file.is_dir():
+                        import shutil
+                        shutil.rmtree(backup_file)
+                    
+                    logger.info(f"🗑️ Removed old backup: {backup_file.name}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Failed to remove old backup {backup_file}: {e}")
+    
+    async def _cleanup_old_data(self):
+        """Clean up old monitoring data."""
+        try:
+            # Clean old health checks
+            retention_days = self.config['monitoring']['metrics_retention_days']
+            cutoff_time = datetime.now() - timedelta(days=retention_days)
+            
+            self.health_checks = [
+                hc for hc in self.health_checks 
+                if datetime.fromisoformat(hc.timestamp) > cutoff_time
+            ]
+            
+            # Clean old alerts (keep resolved alerts for longer)
+            alert_retention = timedelta(days=retention_days * 2)
+            alert_cutoff = datetime.now() - alert_retention
+            
+            self.alerts = [
+                alert for alert in self.alerts 
+                if datetime.fromisoformat(alert.timestamp) > alert_cutoff
+            ]
+            
+            # Save cleaned data
+            await self._save_monitoring_state()
+            
+            logger.info("🧹 Old monitoring data cleaned up")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to cleanup old data: {e}")
+    
+    async def _save_monitoring_state(self):
+        """Save current monitoring state."""
+        try:
+            state = {
+                'health_checks': [asdict(hc) for hc in self.health_checks],
+                'alerts': [asdict(alert) for alert in self.alerts],
+                'metrics_history': self.metrics_history,
+                'system_start_time': self.system_start_time.isoformat(),
+                'last_backup_time': self.last_backup_time.isoformat() if self.last_backup_time else None
+            }
+            
+            state_file = self.monitor_dir / "monitoring_state.json"
+            with open(state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save monitoring state: {e}")
+    
+    async def _save_metrics(self):
+        """Save metrics history to file."""
+        try:
+            metrics_file = self.monitor_dir / "metrics_history.json"
+            with open(metrics_file, 'w') as f:
+                json.dump(self.metrics_history, f, indent=2)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save metrics: {e}")
+    
+    async def _save_alerts(self):
+        """Save alerts to file."""
+        try:
+            alerts_file = self.monitor_dir / "alerts.json"
+            alerts_data = [asdict(alert) for alert in self.alerts]
+            
+            with open(alerts_file, 'w') as f:
+                json.dump(alerts_data, f, indent=2)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save alerts: {e}")
+    
+    async def get_system_status(self) -> Dict[str, Any]:
+        """Get comprehensive system status."""
+        recent_checks = [
+            hc for hc in self.health_checks 
+            if datetime.fromisoformat(hc.timestamp) > datetime.now() - timedelta(minutes=15)
+        ]
+        
+        recent_alerts = [
+            alert for alert in self.alerts 
+            if datetime.fromisoformat(alert.timestamp) > datetime.now() - timedelta(hours=24)
+        ]
+        
+        # Calculate overall health
+        if recent_checks:
+            critical_checks = [hc for hc in recent_checks if hc.status == "critical"]
+            warning_checks = [hc for hc in recent_checks if hc.status == "warning"]
+            
+            if critical_checks:
+                overall_status = "critical"
+            elif warning_checks:
+                overall_status = "warning"
+            else:
+                overall_status = "healthy"
+        else:
+            overall_status = "unknown"
+        
+        return {
+            'overall_status': overall_status,
+            'uptime_seconds': (datetime.now() - self.system_start_time).total_seconds(),
+            'monitoring_active': self.is_monitoring,
+            'recent_health_checks': len(recent_checks),
+            'recent_alerts': len(recent_alerts),
+            'last_backup': self.last_backup_time.isoformat() if self.last_backup_time else None,
+            'services_status': self._get_services_status(recent_checks),
+            'alerts_summary': self._get_alerts_summary(recent_alerts)
+        }
+    
+    def _get_services_status(self, recent_checks: List[HealthCheck]) -> Dict[str, str]:
+        """Get status of each service."""
+        services = {}
+        for check in recent_checks:
+            if check.service_name not in services:
+                services[check.service_name] = check.status
+            else:
+                # Keep the worst status
+                current = services[check.service_name]
+                if check.status == "critical" or (check.status == "warning" and current == "healthy"):
+                    services[check.service_name] = check.status
+        
+        return services
+    
+    def _get_alerts_summary(self, recent_alerts: List[Alert]) -> Dict[str, int]:
+        """Get summary of recent alerts."""
+        summary = {'info': 0, 'warning': 0, 'error': 0, 'critical': 0}
+        
+        for alert in recent_alerts:
+            if not alert.resolved:
+                summary[alert.severity] = summary.get(alert.severity, 0) + 1
+        
+        return summary
+
+
+class DeploymentManager:
+    """Production deployment management system."""
+    
+    def __init__(self, config: DeploymentConfig):
+        self.config = config
+        self.docker_client = None
+        
+        try:
+            self.docker_client = docker.from_env()
+        except Exception as e:
+            logger.warning(f"Docker not available: {e}")
+    
+    async def deploy(self, version: str = "latest") -> Dict[str, Any]:
+        """Deploy the application to production."""
+        logger.info(f"🚀 Starting deployment of version {version} to {self.config.environment}")
+        
+        deployment_result = {
+            'version': version,
+            'environment': self.config.environment,
+            'start_time': datetime.now().isoformat(),
+            'status': 'started',
+            'steps': []
+        }
+        
+        try:
+            # Pre-deployment checks
+            await self._pre_deployment_checks(deployment_result)
+            
+            # Build or pull Docker image
+            await self._prepare_docker_image(version, deployment_result)
+            
+            # Deploy containers
+            await self._deploy_containers(deployment_result)
+            
+            # Post-deployment health checks
+            await self._post_deployment_checks(deployment_result)
+            
+            deployment_result['status'] = 'success'
+            deployment_result['end_time'] = datetime.now().isoformat()
+            
+            logger.info("✅ Deployment completed successfully")
+            return deployment_result
+            
+        except Exception as e:
+            deployment_result['status'] = 'failed'
+            deployment_result['error'] = str(e)
+            deployment_result['end_time'] = datetime.now().isoformat()
+            
+            logger.error(f"❌ Deployment failed: {e}")
+            
+            # Rollback if configured
+            if self.config.rollback_on_failure:
+                await self._rollback(deployment_result)
+            
+            return deployment_result
+    
+    async def _pre_deployment_checks(self, result: Dict[str, Any]):
+        """Run pre-deployment checks."""
+        logger.info("🔍 Running pre-deployment checks...")
+        
+        checks = []
+        
+        # Check Docker availability
+        if self.docker_client:
+            checks.append({'check': 'docker_available', 'status': 'passed'})
+        else:
+            checks.append({'check': 'docker_available', 'status': 'failed'})
+            raise Exception("Docker not available")
+        
+        # Check resource availability
+        memory = psutil.virtual_memory()
+        if memory.available > 2 * 1024**3:  # 2GB available
+            checks.append({'check': 'memory_available', 'status': 'passed'})
+        else:
+            checks.append({'check': 'memory_available', 'status': 'warning'})
+        
+        # Check disk space
+        disk = psutil.disk_usage('/')
+        if disk.free > 5 * 1024**3:  # 5GB free
+            checks.append({'check': 'disk_space', 'status': 'passed'})
+        else:
+            checks.append({'check': 'disk_space', 'status': 'failed'})
+            raise Exception("Insufficient disk space")
+        
+        result['steps'].append({
+            'step': 'pre_deployment_checks',
+            'status': 'completed',
+            'checks': checks,
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    async def _prepare_docker_image(self, version: str, result: Dict[str, Any]):
+        """Prepare Docker image for deployment."""
+        logger.info(f"📦 Preparing Docker image: {self.config.docker_image}:{version}")
+        
+        try:
+            # Pull the image
+            image = self.docker_client.images.pull(self.config.docker_image, tag=version)
+            
+            result['steps'].append({
+                'step': 'docker_image_preparation',
+                'status': 'completed',
+                'image_id': image.id,
+                'image_tags': image.tags,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            result['steps'].append({
+                'step': 'docker_image_preparation',
+                'status': 'failed',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            })
+            raise
+    
+    async def _deploy_containers(self, result: Dict[str, Any]):
+        """Deploy application containers."""
+        logger.info(f"🚀 Deploying {self.config.replicas} container replicas...")
+        
+        deployed_containers = []
+        
+        try:
+            for i in range(self.config.replicas):
+                container_name = f"feedback-system-{self.config.environment}-{i+1}"
+                
+                # Stop existing container if it exists
+                try:
+                    existing = self.docker_client.containers.get(container_name)
+                    existing.stop()
+                    existing.remove()
+                except docker.errors.NotFound:
+                    pass
+                
+                # Create and start new container
+                container = self.docker_client.containers.run(
+                    f"{self.config.docker_image}:latest",
+                    name=container_name,
+                    environment=self.config.environment_variables,
+                    detach=True,
+                    restart_policy={"Name": "unless-stopped"},
+                    mem_limit=self.config.resource_limits.get('memory', '2g'),
+                    cpus=self.config.resource_limits.get('cpu', '1.0')
+                )
+                
+                deployed_containers.append({
+                    'name': container_name,
+                    'id': container.id,
+                    'status': container.status
+                })
+            
+            result['steps'].append({
+                'step': 'container_deployment',
+                'status': 'completed',
+                'containers': deployed_containers,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            result['steps'].append({
+                'step': 'container_deployment',
+                'status': 'failed',
+                'error': str(e),
+                'deployed_containers': deployed_containers,
+                'timestamp': datetime.now().isoformat()
+            })
+            raise
+    
+    async def _post_deployment_checks(self, result: Dict[str, Any]):
+        """Run post-deployment health checks."""
+        logger.info("🏥 Running post-deployment health checks...")
+        
+        # Wait for containers to start
+        await asyncio.sleep(10)
+        
+        health_checks = []
+        timeout = self.config.health_check_timeout
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            try:
+                # Check container health
+                containers = self.docker_client.containers.list(
+                    filters={'name': f'feedback-system-{self.config.environment}'}
+                )
+                
+                all_healthy = True
+                for container in containers:
+                    container.reload()  # Refresh container state
+                    if container.status != 'running':
+                        all_healthy = False
+                        break
+                
+                if all_healthy and containers:
+                    health_checks.append({
+                        'check': 'containers_running',
+                        'status': 'passed',
+                        'container_count': len(containers)
+                    })
+                    break
+                else:
+                    await asyncio.sleep(5)
+                    
+            except Exception as e:
+                logger.error(f"Health check error: {e}")
+                await asyncio.sleep(5)
+        else:
+            # Timeout reached
+            health_checks.append({
+                'check': 'containers_running',
+                'status': 'failed',
+                'error': 'Health check timeout'
+            })
+            raise Exception("Post-deployment health checks failed")
+        
+        result['steps'].append({
+            'step': 'post_deployment_checks',
+            'status': 'completed',
+            'health_checks': health_checks,
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    async def _rollback(self, result: Dict[str, Any]):
+        """Rollback to previous version."""
+        logger.info("🔄 Starting rollback procedure...")
+        
+        try:
+            # Stop current containers
+            containers = self.docker_client.containers.list(
+                filters={'name': f'feedback-system-{self.config.environment}'}
+            )
+            
+            for container in containers:
+                container.stop()
+                container.remove()
+            
+            # This is a simplified rollback - in production, you would
+            # restore from a backup or redeploy the previous version
+            
+            result['rollback'] = {
+                'status': 'completed',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            logger.info("✅ Rollback completed")
+            
+        except Exception as e:
+            logger.error(f"❌ Rollback failed: {e}")
+            result['rollback'] = {
+                'status': 'failed',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+
+
+# Main CLI interface
+async def main():
+    """Main monitoring and deployment CLI."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Production Monitoring and Deployment System")
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Monitor command
+    monitor_parser = subparsers.add_parser('monitor', help='Start monitoring system')
+    monitor_parser.add_argument('--config', type=Path, help='Configuration file path')
+    monitor_parser.add_argument('--daemon', action='store_true', help='Run as daemon')
+    
+    # Deploy command
+    deploy_parser = subparsers.add_parser('deploy', help='Deploy application')
+    deploy_parser.add_argument('--version', default='latest', help='Version to deploy')
+    deploy_parser.add_argument('--environment', choices=['development', 'staging', 'production'], 
+                              default='development', help='Target environment')
+    deploy_parser.add_argument('--config', type=Path, help='Deployment configuration file')
+    
+    # Status command
+    status_parser = subparsers.add_parser('status', help='Get system status')
+    status_parser.add_argument('--json', action='store_true', help='Output as JSON')
+    
+    # Backup command
+    backup_parser = subparsers.add_parser('backup', help='Run manual backup')
+    backup_parser.add_argument('--compress', action='store_true', help='Create compressed backup')
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        return 1
+    
+    try:
+        if args.command == 'monitor':
+            monitor = ProductionMonitor(args.config)
+            
+            if args.daemon:
+                # Daemonize the process
+                logger.info("🔄 Starting monitoring daemon...")
+                await monitor.start_monitoring()
+            else:
+                # Run interactively
+                logger.info("🔍 Starting interactive monitoring...")
+                try:
+                    await monitor.start_monitoring()
+                except KeyboardInterrupt:
+                    logger.info("👋 Monitoring stopped by user")
+        
+        elif args.command == 'deploy':
+            # Load deployment configuration
+            deploy_config = DeploymentConfig(
+                environment=args.environment,
+                docker_image='feedback-system',
+                replicas=2 if args.environment == 'production' else 1,
+                resource_limits={'memory': '2g', 'cpu': '1.0'},
+                environment_variables={'ENV': args.environment},
+                health_check_interval=60,
+                backup_retention_days=7
+            )
+            
+            deployment_manager = DeploymentManager(deploy_config)
+            result = await deployment_manager.deploy(args.version)
+            
+            print(f"📊 Deployment Result:")
+            print(f"   Status: {result['status']}")
+            print(f"   Version: {result['version']}")
+            print(f"   Environment: {result['environment']}")
+            
+            if result['status'] == 'success':
+                print("✅ Deployment completed successfully!")
+                return 0
+            else:
+                print(f"❌ Deployment failed: {result.get('error', 'Unknown error')}")
+                return 1
+        
+        elif args.command == 'status':
+            monitor = ProductionMonitor()
+            status = await monitor.get_system_status()
+            
+            if args.json:
+                print(json.dumps(status, indent=2))
+            else:
+                print("📊 System Status:")
+                print(f"   Overall Status: {status['overall_status'].upper()}")
+                print(f"   Uptime: {status['uptime_seconds']:.0f} seconds")
+                print(f"   Monitoring Active: {status['monitoring_active']}")
+                print(f"   Recent Health Checks: {status['recent_health_checks']}")
+                print(f"   Recent Alerts: {status['recent_alerts']}")
+                
+                if status['services_status']:
+                    print("   Services:")
+                    for service, service_status in status['services_status'].items():
+                        status_icon = "🟢" if service_status == "healthy" else "🟡" if service_status == "warning" else "🔴"
+                        print(f"     {status_icon} {service}: {service_status}")
+        
+        elif args.command == 'backup':
+            monitor = ProductionMonitor()
+            await monitor._run_backup()
+            print("✅ Backup completed successfully!")
+        
+        return 0
+        
+    except Exception as e:
+        logger.error(f"❌ Command failed: {e}")
+        return 1
+
+
+if __name__ == "__main__":
+    # Setup signal handlers
+    import signal
+    
+    def signal_handler(signum, frame):
+        logger.info(f"📡 Received signal {signum}, shutting down...")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Run main
+    try:
+        exit_code = asyncio.run(main())
+        sys.exit(exit_code)
+    except KeyboardInterrupt:
+        print("\n👋 Goodbye!")
+        sys.exit(0)
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
+        sys.exit(1)#!/usr/bin/env python3
